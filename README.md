@@ -8,6 +8,10 @@ For compatible input matrices, the expected calculation is:
 
 The Python model provides expected numerical results and reproducible input vectors. The Verilog implementation will be checked against these results using hardware testbenches.
 
+**Current milestone:** the Python model and the two unsigned 4x4 multiplier tiles are verified. The configurable signed multiplier, MAC, PE and complete array are the next implementation stages.
+
+**Target:** 256 PEs in a 16x16 array, signed INT4/INT8/INT16 operands, and a 300 MHz clock. The clock rate and power savings remain targets until measured on the corresponding implementation.
+
 ## Start here
 
 - [Python reference model and commands](reference_model/README.md)
@@ -16,11 +20,13 @@ The Python model provides expected numerical results and reproducible input vect
 - [Synthesis scripts and constraints](synthesis/README.md)
 - [Architecture notes and presentations](docs/README.md)
 - [Selected verification and synthesis results](reports/README.md)
+- [Implementation roadmap](docs/roadmap.md)
 
 ## Project goals
 
 - Implement a 16x16 systolic matrix-multiplication engine.
 - Support signed INT4, INT8 and INT16 operands.
+- Evaluate the registered implementation against a 300 MHz timing target.
 - Study precision-dependent activation and operand isolation.
 - Check arithmetic correctness and hardware control behavior.
 - Compare area, timing and power using documented synthesis settings.
@@ -40,6 +46,15 @@ These are design goals. Record achieved results in `reports/` with the tested so
 | `vectors/` | Regenerable test data; created by the command below and ignored by Git |
 | `README.md` | Project overview and first commands |
 | `.gitignore` | Patterns for generated files that should stay outside commits |
+| `.github/workflows/verify.yml` | Automated Python and unsigned-tile checks after upload |
+
+## Target architecture
+
+Each PE will contain one shared multiplier assembled from sixteen unsigned 4x4 tiles. Runtime precision selects one tile for INT4, four tiles for INT8, or all sixteen for INT16. BASIC and HSM are alternative implementations of a tile.
+
+The planned datapath is signed-input decoding, unsigned tile products, weighted CSA reduction, final product reconstruction and sign restoration, followed by registered accumulation. A moves right and B moves down between neighbouring PEs.
+
+The tile grid and the PE array are different levels of the design. See the [architecture notes](docs/architecture.md) for the widths and planned control boundaries.
 
 ## Current reference-model status
 
@@ -48,9 +63,21 @@ These are design goals. Record achieved results in `reports/` with the tested so
 - Square 2x2, 4x4 and 16x16 cases are generated for all three modes.
 - The deterministic vector suite contains **127 matrix cases**, including **42 full 16x16 cases**.
 - The supplied Python test file contains **13 test methods** with multiple assertions and input cases.
-- These 13 test methods passed when checked on 16 October 2026.
+- These 13 test methods passed when rechecked on 18 October 2026.
 
-RTL implementation is in progress. Document each uploaded module and its actual verification status in `rtl/README.md` and `tb/README.md`.
+## Current hardware status
+
+| Block | Status | Evidence or next action |
+| --- | --- | --- |
+| BASIC unsigned 4x4 tile | Verified in RTL simulation | All 256 unsigned input pairs |
+| HSM unsigned 4x4 tile | Verified in RTL simulation | Same 256 pairs; independent repeated-addition expectation |
+| Precision/sign decoder | Next integration step | Select signed fields and form unsigned magnitudes |
+| Configurable tiled multiplier | Planned | Tile isolation, CSA reduction and sign restoration |
+| Registered MAC and PE | Planned | Accumulation, valid/control handling and operand forwarding |
+| 16x16 systolic array | Planned | Input sequencing and comparison with the Python matrix answers |
+| Synthesis and activity-based power comparison | Pending for the documented implementations | Publish scripts, constraints, configuration and matching reports |
+
+See the [verification record](reports/verification/2026-10-18.md). The verification workflow in this update is ready to run on GitHub once uploaded; a hosted CI run has not yet been recorded here.
 
 ## Run the Python model
 
@@ -106,6 +133,8 @@ Raw input words are 16 bits wide. The selected lower 4, 8 or 16 bits are interpr
 
 Passing Python tests validates the reference-model checks. Hardware correctness requires RTL simulation and comparison.
 
+The current unsigned-tile testbench checks both candidates against repeated addition. Integration with the Python matrix-vector interface is a later milestone. The [verification guide](docs/verification.md) explains the distinct test counts and checking methods.
+
 ## Development conventions
 
 - Use one descriptive filename for each module; normally match the module name.
@@ -113,3 +142,16 @@ Passing Python tests validates the reference-model checks. Hardware correctness 
 - Edit and commit existing files instead of making `final2`, `new` or `latest` copies.
 - Add a short README entry with a module's purpose, interface and tested command when adding it.
 - Keep reusable scripts in Git and regenerate temporary outputs locally.
+
+After each implementation step, update the relevant folder guide, run its checks, record the result and make a descriptive commit. Keep implementation status separate from measured performance.
+
+## Team
+
+- Ram Siddardha Tammireddi
+- Pruthvi Raj L.
+
+VLSI Design Laboratory, IIT Delhi. Guides: Prof. Kaushik Saha and Prof. Jayadeva.
+
+## Study reference
+
+The HSM tile is based on the difference-of-squares approach studied in [US7873823B2](https://patents.google.com/patent/US7873823B2/en). Performance claims for a patent implementation are separate from measurements of this repository's RTL.
