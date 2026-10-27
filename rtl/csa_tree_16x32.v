@@ -3,11 +3,24 @@
 // Four local groups give eight rows, then a shared tree reduces eight to two.
 // Intended for tile_product_bank: the nonnegative total must fit in 32 bits.
 // Carry outputs are unshifted; align each carry once at its next input.
+// INT4 bypasses all CSAs; INT8 bypasses the shared tree; INT16 uses both.
 module csa_tree_16x32 (
+    input  wire [1:0]   mode,
+    input  wire         enable,
     input  wire [511:0] partial_products,
-    output wire [31:0]  sum,
-    output wire [31:0]  carry
+    output reg  [31:0]  sum,
+    output reg  [31:0]  carry
 );
+
+    // Enable only the reduction sections needed for the selected precision.
+    // These are combinational operand-isolation controls, with no clock.
+    wire shared_enable;
+    wire [3:0] local_enabled;
+    wire [31:0] local_input0 [0:3];
+    wire [31:0] local_input1 [0:3];
+    wire [31:0] local_input2 [0:3];
+    wire [31:0] local_input3 [0:3];
+    assign shared_enable = enable && (mode == 2'b10);
 
     // Two CSAs per local group: first 3 -> 2, then combine the fourth row.
     wire [31:0] local_sum_first [0:3];
@@ -15,6 +28,8 @@ module csa_tree_16x32 (
     wire [31:0] group_sum [0:3];
     wire [31:0] group_carry [0:3];
     wire [31:0] shared_input [0:7];
+    wire [31:0] shared_sum;
+    wire [31:0] shared_carry;
 
     // Shared reduction levels: eight -> six -> four -> three -> two.
     wire [31:0] level1 [0:5];
@@ -38,11 +53,24 @@ module csa_tree_16x32 (
             localparam integer TILE_10 = TILE_00 + 4;
             localparam integer TILE_11 = TILE_00 + 5;
 
+            // INT8 uses group 0 only; INT16 uses all four local groups.
+            // INT4 and disabled/reserved operations isolate every local CSA.
+            assign local_enabled[g] = shared_enable ||
+                (enable && (mode == 2'b01) && (g == 0));
+            assign local_input0[g] = local_enabled[g]
+                ? partial_products[32*TILE_00 +: 32] : 32'd0;
+            assign local_input1[g] = local_enabled[g]
+                ? partial_products[32*TILE_01 +: 32] : 32'd0;
+            assign local_input2[g] = local_enabled[g]
+                ? partial_products[32*TILE_10 +: 32] : 32'd0;
+            assign local_input3[g] = local_enabled[g]
+                ? partial_products[32*TILE_11 +: 32] : 32'd0;
+
             // First local CSA consumes three of this quadrant's products.
             csa_3to2 first (
-                .x(partial_products[32*TILE_00 +: 32]),
-                .y(partial_products[32*TILE_01 +: 32]),
-                .z(partial_products[32*TILE_10 +: 32]),
+                .x(local_input0[g]),
+                .y(local_input1[g]),
+                .z(local_input2[g]),
                 .sum(local_sum_first[g]), .carry(local_carry_first[g])
             );
 
@@ -50,13 +78,15 @@ module csa_tree_16x32 (
             csa_3to2 second (
                 .x(local_sum_first[g]),
                 .y({local_carry_first[g][30:0], 1'b0}),
-                .z(partial_products[32*TILE_11 +: 32]),
+                .z(local_input3[g]),
                 .sum(group_sum[g]), .carry(group_carry[g])
             );
 
-            // Present both local outputs as aligned rows to the shared tree.
-            assign shared_input[2*g] = group_sum[g];
-            assign shared_input[2*g+1] = {group_carry[g][30:0], 1'b0};
+            // Feed the shared tree only in INT16 mode.
+            // INT8's active local outputs are blocked from the unused tree.
+            assign shared_input[2*g] = shared_enable ? group_sum[g] : 32'd0;
+            assign shared_input[2*g+1] = shared_enable
+                ? {group_carry[g][30:0], 1'b0} : 32'd0;
         end
 
         // SHARED LEVEL 1: two CSAs plus two pass-through rows: eight -> six.
@@ -96,11 +126,37 @@ module csa_tree_16x32 (
     // Keep the final carry UNSHIFTED, matching csa_3to2's interface.
     csa_3to2 level4_reduce (
         .x(level3[0]), .y(level3[1]), .z(level3[2]),
-        .sum(sum), .carry(carry)
+        .sum(shared_sum), .carry(shared_carry)
     );
+
+    // Choose the shortest required reduction path for each precision.
+    // All branches preserve the same identity: total = sum + 2*carry.
+    always @* begin
+        sum = 32'd0;
+        carry = 32'd0;
+        if (enable) begin
+            case (mode)
+                2'b00: begin
+                    sum = partial_products[31:0]; // The one INT4 tile product.
+                    carry = 32'd0;
+                end
+                2'b01: begin
+                    sum = group_sum[0]; // Only the first local group is needed.
+                    carry = group_carry[0];
+                end
+                2'b10: begin
+                    sum = shared_sum; // All local groups plus shared reduction.
+                    carry = shared_carry;
+                end
+                default: begin
+                    sum = 32'd0;
+                    carry = 32'd0;
+                end
+            endcase
+        end
+    end
 
     // Eight local CSAs plus six shared CSAs give fourteen in total.
     // Under the input bound, all discarded carry[31] bits are zero.
-    // Precision-dependent bypass/isolation of the shared tree is a later step.
     // Next block: magnitude_product = sum + (carry shifted left by one).
 endmodule
