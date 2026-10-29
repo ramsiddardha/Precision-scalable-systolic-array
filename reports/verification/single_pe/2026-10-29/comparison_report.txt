@@ -1,0 +1,13 @@
+PYTHON vs RTL: PASS
+Profile: full; seed: 20261029
+Clocked cycles: 100,408
+Pre/post samples compared: 200,816
+High-phase clock-gating state checks: 3,478
+Complete legal 16-term frames: 5,082; failed: 0
+Products and running sums compared: 81,440; failed: 0
+Mismatched samples: 0
+INT4: 256/256 unique operand pairs, 130 complete legal frames
+INT8: 65,536/65,536 unique operand pairs, 4,210 complete legal frames
+INT16: 11,643/4,294,967,296 unique operand pairs, 742 complete legal frames
+
+Finite RTL simulation; INT16 pairs and full 16-term sequences are not exhaustive. Unknowns are tested in ignored operand bits and mode, not active arithmetic fields.
