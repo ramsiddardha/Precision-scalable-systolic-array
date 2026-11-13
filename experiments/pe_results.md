@@ -6,7 +6,6 @@ has three values, the order is INT4 / INT8 / INT16.
 
 | Metric | BK-PE | LS-PE (Baseline) | LS-PE (Group Ripple) |
 | --- | ---: | ---: | ---: |
-| Cell library | UMC65 | TSMC65 LP | TSMC65 LP |
 | Mapped cells | 1,987 | 2,062 | 2,047 |
 | Mapped cell area (library units) | 5,958.36 | 5,847.48 | 5,830.20 |
 | Critical data-path delay (ns) | 2.793 | 2.774 | 2.774 |
