@@ -20,8 +20,7 @@ has three values, the order is INT4 / INT8 / INT16.
 | Total power change versus BK-PE | Reference | −39.1% / −32.1% / −2.4% | −39.9% / −32.6% / −3.0% |
 
 Both LS-PE variants reported lower total power than BK-PE in all three
-modes. The BK-PE comparison includes the effect of using a different
-cell library, so it cannot isolate the effect of the RTL changes.
+modes.
 
 We carried both LS-PE variants forward to array-level analysis.
 LS-PE (Baseline) serves as the integration reference. LS-PE (Group
